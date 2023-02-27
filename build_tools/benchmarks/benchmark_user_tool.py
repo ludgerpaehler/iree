@@ -14,7 +14,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent.with_name("python")))
 
 import argparse
 import pprint
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 import re
 import requests
 
@@ -68,10 +68,13 @@ def _print_gen_config(gen_config: iree_definitions.ModuleGenerationConfig,
 
   builder = iree_rule_generator.IreeRuleBuilder(package_name="")
   compile_config = gen_config.compile_config
-  compile_flags = builder._generate_compile_flags(
-      compile_config=compile_config,
-      mlir_dialect_type=gen_config.imported_model.import_config.dialect_type.
-      value) + compile_config.extra_flags
+  if hasattr(gen_config, "compile_flags"):
+    compile_flags = gen_config.compile_flags
+  else:
+    compile_flags = builder._generate_compile_flags(
+        compile_config=compile_config,
+        mlir_dialect_type=gen_config.imported_model.import_config.dialect_type.
+        value) + compile_config.extra_flags
   compile_flags.append(
       str(
           iree_artifacts.get_imported_model_path(gen_config.imported_model,
@@ -79,6 +82,13 @@ def _print_gen_config(gen_config: iree_definitions.ModuleGenerationConfig,
                                                  LOCAL_E2E_TEST_ARTIFACTS_DIR)))
   print("Compile flags:")
   print(" ".join(compile_flags) + "\n")
+
+
+def get_composite_id(obj: object) -> str:
+  composite_id_obj = getattr(obj, "composite_id")
+  if callable(composite_id_obj):
+    return composite_id_obj()
+  return composite_id_obj
 
 
 def _explain_handler(gcs_url: str, root_dir: pathlib.Path,
@@ -92,7 +102,7 @@ def _explain_handler(gcs_url: str, root_dir: pathlib.Path,
   matched_gen_configs = []
   dep_gen_configs = {}
   for gen_config in gen_configs:
-    gen_config_id = gen_config.composite_id()
+    gen_config_id = get_composite_id(gen_config)
     if gen_config_id != benchmark_id_filter:
       continue
     matched_gen_configs.append(gen_config)
@@ -103,12 +113,12 @@ def _explain_handler(gcs_url: str, root_dir: pathlib.Path,
     run_configs = serialization.unpack_and_deserialize(
         data["run_configs"], root_type=List[iree_definitions.E2EModelRunConfig])
     for run_config in run_configs:
-      run_config_id = run_config.composite_id()
+      run_config_id = get_composite_id(run_config)
       if run_config_id != benchmark_id_filter:
         continue
       matched_run_configs.append(run_config)
       gen_config = run_config.module_generation_config
-      dep_gen_configs[gen_config.composite_id()] = gen_config
+      dep_gen_configs[get_composite_id(gen_config)] = gen_config
 
   _fetch_artifacts(gcs_url=gcs_url,
                    gen_configs=list(dep_gen_configs.values()),
@@ -116,13 +126,13 @@ def _explain_handler(gcs_url: str, root_dir: pathlib.Path,
 
   for gen_config in matched_gen_configs:
     print(
-        f"\n--------\nExplaining compilation benchmark: {gen_config.composite_id()}\n"
+        f"\n--------\nExplaining compilation benchmark: {get_composite_id(gen_config)}\n"
     )
     _print_gen_config(gen_config, root_dir)
 
   for run_config in matched_run_configs:
     print(
-        f"\n--------\nExplaining execution benchmark: {run_config.composite_id()}\n"
+        f"\n--------\nExplaining execution benchmark: {get_composite_id(run_config)}\n"
     )
 
     _print_gen_config(run_config.module_generation_config, root_dir)
@@ -133,11 +143,14 @@ def _explain_handler(gcs_url: str, root_dir: pathlib.Path,
     run_flags = [
         f"--module={root_dir / LOCAL_E2E_TEST_ARTIFACTS_DIR / module_dir_path / iree_artifacts.MODULE_FILENAME}"
     ]
-    run_flags += run_module_utils.build_run_flags_for_model(
-        model=run_config.module_generation_config.imported_model.model,
-        model_input_data=run_config.input_data)
-    run_flags += run_module_utils.build_run_flags_for_execution_config(
-        run_config.module_execution_config)
+    if hasattr(run_config,"run_flags"):
+      run_flags += run_config.run_flags
+    else:
+      run_flags += run_module_utils.build_run_flags_for_model(
+          model=run_config.module_generation_config.imported_model.model,
+          model_input_data=run_config.input_data)
+      run_flags += run_module_utils.build_run_flags_for_execution_config(
+          run_config.module_execution_config)
     print(" ".join(run_flags) + "\n")
 
     print("Target device:")
