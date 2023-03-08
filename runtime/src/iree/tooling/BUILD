@@ -147,6 +147,18 @@ iree_runtime_cc_test(
     ],
 )
 
+cc_library(
+    name = "trace_emitter",
+    srcs = ["trace_emitter.c"],
+    hdrs = ["trace_emitter.h"],
+    deps = [
+        "//runtime/src/iree/base",
+        "//runtime/src/iree/hal",
+        "//runtime/src/iree/modules/hal:types",
+        "//runtime/src/iree/vm",
+    ],
+)
+
 # TODO(benvanik): fold these into iree/runtime and use that instead.
 cc_library(
     name = "vm_util",
