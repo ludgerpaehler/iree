@@ -10,12 +10,10 @@
 
 #include "iree/base/internal/atomics.h"
 
-// TODO(benvanik): dynamic, if we care - otherwise keep small.
-// After a dozen or so types the linear scan will likely start to spill the
-// DCACHE and need to be reworked. I suspect at the time we have >=64 types
-// we'll want to rewrite all of this anyway (using externalized type ID storage
-// or something more complex).
-#define IREE_VM_MAX_TYPE_ID 64
+IREE_API_EXPORT iree_string_view_t
+iree_vm_ref_type_name(iree_vm_ref_type_t type) {
+  return ((const iree_vm_ref_type_descriptor_t*)type)->type_name;
+}
 
 static inline volatile iree_atomic_ref_count_t* iree_vm_get_raw_counter_ptr(
     void* ptr, const iree_vm_ref_type_descriptor_t* type_descriptor) {
@@ -47,67 +45,6 @@ IREE_API_EXPORT void iree_vm_ref_object_release(
       type_descriptor->destroy(ptr);
     }
   }
-}
-
-IREE_API_EXPORT iree_string_view_t
-iree_vm_ref_type_name(iree_vm_ref_type_t type) {
-  return ((const iree_vm_ref_type_descriptor_t*)type)->type_name;
-}
-
-// A table of type descriptors registered at startup.
-// These provide quick dereferencing of destruction functions and type names for
-// debugging. Note that this just points to registered descriptors (or NULL) for
-// each type ID in the type range and does not own the descriptors.
-//
-// Note that [0] is always the NULL type and has a NULL descriptor. We don't
-// allow types to be registered there.
-static const iree_vm_ref_type_descriptor_t*
-    iree_vm_ref_type_descriptors[IREE_VM_MAX_TYPE_ID] = {0};
-
-IREE_API_EXPORT iree_status_t iree_vm_instance_register_type(
-    iree_vm_instance_t* instance, iree_vm_ref_type_descriptor_t* descriptor) {
-  // HACK: until properly registering we do this scan each time.
-  // Callers shouldn't be registering types in tight loops anyway.
-  for (int i = 1; i <= IREE_VM_MAX_TYPE_ID; ++i) {
-    if (iree_vm_ref_type_descriptors[i] == descriptor) {
-      // Already registered.
-      return iree_ok_status();
-    }
-    if (!iree_vm_ref_type_descriptors[i]) {
-      // Store in free slot.
-      iree_vm_ref_type_descriptors[i] = descriptor;
-      return iree_ok_status();
-    }
-  }
-  // Too many user-defined types registered; need to increase
-  // IREE_VM_MAX_TYPE_ID.
-  return iree_make_status(IREE_STATUS_RESOURCE_EXHAUSTED,
-                          "too many user-defined types registered; new type "
-                          "would exceed maximum of %d",
-                          IREE_VM_MAX_TYPE_ID);
-}
-
-IREE_API_EXPORT void iree_vm_instance_unregister_type(
-    iree_vm_instance_t* instance, iree_vm_ref_type_descriptor_t* descriptor) {
-  for (int i = 1; i <= IREE_VM_MAX_TYPE_ID; ++i) {
-    if (iree_vm_ref_type_descriptors[i] == descriptor) {
-      iree_vm_ref_type_descriptors[i] = NULL;
-      return;
-    }
-  }
-}
-
-IREE_API_EXPORT const iree_vm_ref_type_descriptor_t*
-iree_vm_instance_lookup_type(iree_vm_instance_t* instance,
-                             iree_string_view_t full_name) {
-  for (int i = 1; i <= IREE_VM_MAX_TYPE_ID; ++i) {
-    if (iree_vm_ref_type_descriptors[i] &&
-        iree_string_view_equal(iree_vm_ref_type_descriptors[i]->type_name,
-                               full_name)) {
-      return iree_vm_ref_type_descriptors[i];
-    }
-  }
-  return NULL;
 }
 
 // Useful debugging tool:

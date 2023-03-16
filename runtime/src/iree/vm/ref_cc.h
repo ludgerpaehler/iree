@@ -476,26 +476,18 @@ class opaque_ref {
 // dynamic type registration mechanism and that can be wrapped in an
 // iree_vm_ref_t.
 
-#define IREE_VM_DECLARE_CC_TYPE_LOOKUP(name, T)                \
-  namespace iree {                                             \
-  namespace vm {                                               \
-  template <>                                                  \
-  struct ref_type_descriptor<T> {                              \
-    static inline const iree_vm_ref_type_descriptor_t* get() { \
-      return &name##_descriptor;                               \
-    }                                                          \
-    static inline iree_vm_ref_type_t type() {                  \
-      return reinterpret_cast<iree_vm_ref_type_t>(get());      \
-    }                                                          \
-  };                                                           \
-  }                                                            \
+#define IREE_VM_DECLARE_CC_TYPE_LOOKUP(name, T)                               \
+  namespace iree {                                                            \
+  namespace vm {                                                              \
+  template <>                                                                 \
+  struct ref_type_descriptor<T> {                                             \
+    static inline const iree_vm_ref_type_descriptor_t* get() {                \
+      return reinterpret_cast<iree_vm_ref_type_descriptor_t*>(name##_type()); \
+    }                                                                         \
+    static inline iree_vm_ref_type_t type() { return name##_type(); }         \
+  };                                                                          \
+  }                                                                           \
   }
-
-#define IREE_VM_REGISTER_CC_TYPE(instance, type, name, descriptor) \
-  descriptor.type_name = iree_make_cstring_view(name);             \
-  descriptor.offsetof_counter = type::offsetof_counter();          \
-  descriptor.destroy = type::DirectDestroy;                        \
-  IREE_RETURN_IF_ERROR(iree_vm_instance_register_type(instance, &descriptor));
 
 //===----------------------------------------------------------------------===//
 // ref-type registration and declaration for core VM types
