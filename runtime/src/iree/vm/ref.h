@@ -58,7 +58,8 @@ enum iree_vm_ref_type_bits_t {
 typedef void(IREE_API_PTR* iree_vm_ref_destroy_t)(void* ptr);
 
 // Describes a type for the VM.
-typedef struct iree_vm_ref_type_descriptor_t {
+typedef iree_alignas(
+    1 << IREE_VM_REF_TYPE_TAG_BITS) struct iree_vm_ref_type_descriptor_t {
   // Function called when references of this type reach 0 and should be
   // destroyed.
   iree_vm_ref_destroy_t destroy;
